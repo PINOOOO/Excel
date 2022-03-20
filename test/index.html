@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Document</title>
+  <script src="https://unpkg.com/read-excel-file@5.x/bundle/read-excel-file.min.js"></script>
+  <script src="./xlsx.core.min.js"></script>
+</head>
+<body>
+  
+  <div>
+    <input type="file" id="input" />
+  </div>
+
+  <script>
+    const worker = new Worker("./worker.js");
+    const input = document.getElementById('input')
+
+    const parseSheetData = (workbook) => {
+    if (workbook && workbook.SheetNames && workbook.SheetNames.length) {
+        return XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], {
+          header:1,
+          blankRows: false,
+        })
+    }
+    return []
+   }
+
+   const readWorkbookFromLocalFile = (file, callback) => {
+     const reader = new FileReader();
+     
+     reader.onload = function(e) {
+       const data = e.target.result;
+       const workbook = XLSX.read(data, {type: 'binary'});
+       const parsedData = parseSheetData(workbook)
+       console.timeEnd("SheetJS Time");
+       if(callback) callback(workbook);
+     };
+     reader.readAsBinaryString(file);
+   }
+
+    input.addEventListener('change', function() {
+      console.time("read-excel-file Time");
+      readXlsxFile(input.files[0]).then(function(data) {
+        console.timeEnd("read-excel-file Time");
+        // console.log(data)
+      })
+
+      console.time("wasm Time");
+      worker.postMessage({
+        type: "convert",
+        data: input.files[0]
+      });
+
+      console.time("SheetJS Time");
+      readWorkbookFromLocalFile(input.files[0])
+    })
+
+
+    worker.addEventListener("message", e => {
+      if (e.data.type === "ready"){
+        const data = e.data.data;
+        const styles = e.data.styles;
+        console.timeEnd("wasm Time");
+        // console.log(data, styles)
+      }
+    });
+
+  </script>
+</body>
+</html>
